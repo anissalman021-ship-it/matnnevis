@@ -1,1 +1,6 @@
-Add project metadata
+{
+  "name": "متنویس",
+  "description": "دفترچه یادداشت و مدیریت حرفه‌ای نوشته‌ها، ایده‌ها، چک‌لیست‌ها و خاطرات - آفلاین، سریع و امن",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
