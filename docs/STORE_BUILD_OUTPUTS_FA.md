@@ -9,7 +9,7 @@
 برای امضای Release این GitHub Secrets را تعریف کنید:
 - `ANDROID_KEYSTORE_BASE64`: محتوای فایل keystore به صورت Base64
 - `ANDROID_KEYSTORE_PASSWORD`
-- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_ALIAS` (اختیاری؛ در صورت تنظیم، مقدار alias فایل keystore را وارد کنید؛ مقدار پیش‌فرض در پروژه `upload` است.)
 - `ANDROID_KEY_PASSWORD`
 
 فایل keystore و رمزها نباید commit شوند. تا وقتی این Secrets تنظیم نشده‌اند، خروجی Release امضاشده قابل تولید نیست.
