@@ -280,7 +280,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             if (noteId == null || noteId == 0L) {
                 _currentEditingNote.value = NoteEntity(
-                    colorId = userPreferences.value.defaultNoteColor
+                    colorId = userPreferences.value.defaultNoteColor,
+                    // A new note created while a category filter is active belongs
+                    // to that category by default; the editor still lets the user change it.
+                    categoryId = _selectedCategoryId.value
                 )
                 _currentChecklists.value = emptyList()
                 _currentAttachments.value = emptyList()
