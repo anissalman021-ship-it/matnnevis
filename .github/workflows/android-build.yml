@@ -106,3 +106,41 @@ jobs:
           path: app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
           retention-days: 30
+
+      - name: Download Cafe Bazaar bundle signer
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_PASSWORD != '' }}
+        run: |
+          curl --fail --location --retry 3 \
+            https://github.com/cafebazaar/bundle-signer/releases/download/v0.1.13/bundlesigner-0.1.13.jar \
+            --output "$RUNNER_TEMP/bundlesigner-0.1.13.jar"
+          test -s "$RUNNER_TEMP/bundlesigner-0.1.13.jar"
+
+      - name: Generate Cafe Bazaar BIN for signed AAB
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_PASSWORD != '' }}
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/matnnevis-upload.jks
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          mkdir -p app/build/outputs/cafebazaar
+          java -jar "$RUNNER_TEMP/bundlesigner-0.1.13.jar" genbin \
+            --verbose \
+            --bundle app/build/outputs/bundle/release/app-release.aab \
+            --bin app/build/outputs/cafebazaar/ \
+            --v2-signing-enabled true \
+            --v3-signing-enabled false \
+            --ks "$KEYSTORE_PATH" \
+            --ks-pass "pass:$STORE_PASSWORD" \
+            --ks-key-alias "${KEY_ALIAS:-upload}" \
+            --key-pass "pass:$KEY_PASSWORD"
+          test -s app/build/outputs/cafebazaar/app-release.bin
+
+      - name: Upload Cafe Bazaar BIN
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_PASSWORD != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: matnnevis-cafebazaar-bin
+          path: app/build/outputs/cafebazaar/*.bin
+          if-no-files-found: error
+          retention-days: 30
