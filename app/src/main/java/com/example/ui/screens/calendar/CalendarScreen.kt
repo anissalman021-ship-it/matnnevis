@@ -54,10 +54,20 @@ import androidx.compose.ui.unit.sp
 import com.example.core.i18n.LocalAppStrings
 import com.example.ui.screens.home.NoteCard
 import com.example.ui.viewmodel.MainViewModel
-import java.text.SimpleDateFormat
-import java.util.Calendar
+import android.icu.text.SimpleDateFormat
+import android.icu.util.Calendar as PersianCalendar
+import android.icu.util.ULocale
 import java.util.Date
-import java.util.Locale
+
+private val persianCalendarLocale = ULocale("fa_IR@calendar=persian")
+
+private fun jalaliDateKey(timeMillis: Long): String {
+    val calendar = PersianCalendar.getInstance(persianCalendarLocale).apply { this.timeInMillis = timeMillis }
+    return "${calendar.get(PersianCalendar.YEAR)}-${calendar.get(PersianCalendar.MONTH)}-${calendar.get(PersianCalendar.DAY_OF_MONTH)}"
+}
+
+private fun jalaliDateLabel(timeMillis: Long): String =
+    SimpleDateFormat("yyyy/MM/dd", persianCalendarLocale).format(Date(timeMillis))
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,38 +82,36 @@ fun CalendarScreen(
 
     var calendarMonthOffset by remember { mutableIntStateOf(0) }
     var selectedDayKey by remember {
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        mutableStateOf(today)
+        mutableStateOf(jalaliDateKey(System.currentTimeMillis()))
     }
 
     val currentCalendar = remember(calendarMonthOffset) {
-        Calendar.getInstance().apply {
-            add(Calendar.MONTH, calendarMonthOffset)
-            set(Calendar.DAY_OF_MONTH, 1)
+        PersianCalendar.getInstance(persianCalendarLocale).apply {
+            timeInMillis = System.currentTimeMillis()
+            add(PersianCalendar.MONTH, calendarMonthOffset)
+            set(PersianCalendar.DAY_OF_MONTH, 1)
         }
     }
 
-    val monthYearTitle = remember(currentCalendar) {
-        val sdf = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
-        sdf.format(currentCalendar.time)
+    val monthYearTitle = remember(currentCalendar.timeInMillis) {
+        SimpleDateFormat("MMMM yyyy", persianCalendarLocale).format(Date(currentCalendar.timeInMillis))
     }
 
-    val daysInMonth = currentCalendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-    val firstDayOfWeek = currentCalendar.get(Calendar.DAY_OF_WEEK)
+    val daysInMonth = currentCalendar.getActualMaximum(PersianCalendar.DAY_OF_MONTH)
+    val firstDayOfWeek = currentCalendar.get(PersianCalendar.DAY_OF_WEEK)
+    val leadingEmptyCells = (firstDayOfWeek - currentCalendar.firstDayOfWeek + 7) % 7
 
     val notesByDay = remember(activeNotes) {
         val map = mutableMapOf<String, Int>()
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         activeNotes.forEach { note ->
-            val key = sdf.format(Date(note.createdAt))
+            val key = jalaliDateKey(note.createdAt)
             map[key] = (map[key] ?: 0) + 1
         }
         map
     }
 
     val notesForSelectedDay = remember(selectedDayKey, activeNotes) {
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        activeNotes.filter { note -> sdf.format(Date(note.createdAt)) == selectedDayKey }
+        activeNotes.filter { note -> jalaliDateKey(note.createdAt) == selectedDayKey }
     }
 
     Scaffold(
@@ -123,7 +131,7 @@ fun CalendarScreen(
                 actions = {
                     IconButton(onClick = {
                         calendarMonthOffset = 0
-                        selectedDayKey = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                        selectedDayKey = jalaliDateKey(System.currentTimeMillis())
                     }) {
                         Icon(imageVector = Icons.Default.CalendarToday, contentDescription = strings.todayBtn)
                     }
@@ -188,7 +196,7 @@ fun CalendarScreen(
             Spacer(modifier = Modifier.height(6.dp))
 
             // Calendar Grid
-            val totalCells = daysInMonth + (firstDayOfWeek - 1)
+            val totalCells = daysInMonth + leadingEmptyCells
             LazyVerticalGrid(
                 columns = GridCells.Fixed(7),
                 modifier = Modifier
@@ -198,13 +206,12 @@ fun CalendarScreen(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(totalCells) { index ->
-                    val dayNumber = index - (firstDayOfWeek - 2)
+                    val dayNumber = index - leadingEmptyCells + 1
                     if (dayNumber in 1..daysInMonth) {
-                        val tempCal = Calendar.getInstance().apply {
-                            time = currentCalendar.time
-                            set(Calendar.DAY_OF_MONTH, dayNumber)
+                        val tempCal = (currentCalendar.clone() as PersianCalendar).apply {
+                            set(PersianCalendar.DAY_OF_MONTH, dayNumber)
                         }
-                        val dateKey = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(tempCal.time)
+                        val dateKey = jalaliDateKey(tempCal.timeInMillis)
                         val isSelected = (dateKey == selectedDayKey)
                         val notesCount = notesByDay[dateKey] ?: 0
 
@@ -254,7 +261,7 @@ fun CalendarScreen(
             ) {
                 Column {
                     Text(
-                        text = "${strings.notesForDateLabel} $selectedDayKey",
+                        text = "${strings.notesForDateLabel} ${jalaliDateLabel(notesForSelectedDay.firstOrNull()?.createdAt ?: currentCalendar.timeInMillis)}",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -268,7 +275,7 @@ fun CalendarScreen(
                 Button(
                     onClick = {
                         viewModel.loadNoteForEditing(0L)
-                        viewModel.updateEditorTitle("${strings.dailyNote} — $selectedDayKey")
+                        viewModel.updateEditorTitle("${strings.dailyNote} — ${jalaliDateLabel(currentCalendar.timeInMillis)}")
                         viewModel.updateEditorTags(strings.dailyNote)
                         viewModel.saveCurrentNoteImmediately()
                         onNavigateToEditor(0L)
