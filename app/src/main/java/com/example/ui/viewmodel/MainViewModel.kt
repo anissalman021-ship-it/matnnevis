@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -372,20 +373,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         autoSaveJob?.cancel()
     }
 
-    fun saveCurrentNoteImmediately() {
-        val note = _currentEditingNote.value ?: return
+    fun saveCurrentNoteImmediately(onSaved: (() -> Unit)? = null) {
+        val note = _currentEditingNote.value
+        if (note == null) {
+            onSaved?.invoke()
+            return
+        }
         if (note.title.isBlank() && note.content.isBlank() && _currentChecklists.value.isEmpty() && _currentAttachments.value.isEmpty()) {
+            onSaved?.invoke()
             return
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             val checklistsStr = serializeChecklists(_currentChecklists.value)
             val attachmentsStr = serializeAttachments(_currentAttachments.value)
             val toSave = note.copy(
                 checklistsJson = checklistsStr,
                 attachmentsJson = attachmentsStr
             )
-            val savedId = repository.saveNote(toSave)
+            val savedId = withContext(Dispatchers.IO) { repository.saveNote(toSave) }
             val savedNote = toSave.copy(id = savedId)
             _currentEditingNote.value = savedNote
             val reminderTime = savedNote.reminderTime
@@ -401,6 +407,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } else if (reminderTime == null) {
                 ReminderManager.cancelReminder(getApplication(), savedId)
             }
+            onSaved?.invoke()
         }
     }
 
