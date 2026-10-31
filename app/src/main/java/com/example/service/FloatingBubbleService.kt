@@ -71,6 +71,10 @@ class FloatingBubbleService : Service() {
             }
         }
 
+        val scratch = getSharedPreferences(SCRATCH_PREFS, Context.MODE_PRIVATE)
+        draftTitle = scratch.getString(SCRATCH_TITLE, "").orEmpty()
+        draftBody = scratch.getString(SCRATCH_BODY, "").orEmpty()
+
         startForeground(NOTIFICATION_ID, createNotification())
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         setupBubble()
@@ -346,6 +350,7 @@ class FloatingBubbleService : Service() {
                                     )
                                     draftTitle = ""
                                     draftBody = ""
+                                    getSharedPreferences(SCRATCH_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
                                     Toast.makeText(this@FloatingBubbleService, currentStrings.floatingSavedToast, Toast.LENGTH_SHORT).show()
                                     hideQuickNoteDialog()
                                 }
@@ -448,6 +453,9 @@ class FloatingBubbleService : Service() {
 
     companion object {
         const val NOTIFICATION_ID = 1001
+        private const val SCRATCH_PREFS = "floating_scratch_draft"
+        private const val SCRATCH_TITLE = "title"
+        private const val SCRATCH_BODY = "body"
 
         fun hasOverlayPermission(context: Context): Boolean {
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
