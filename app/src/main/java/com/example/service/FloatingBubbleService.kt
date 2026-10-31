@@ -377,6 +377,8 @@ class FloatingBubbleService : Service() {
         var startY = 0
         var startTouchX = 0f
         var startTouchY = 0f
+        var startBubbleX = 0
+        var startBubbleY = 0
         handle.setOnTouchListener { _, event ->
             val params = dialogParams ?: return@setOnTouchListener false
             when (event.action) {
@@ -385,6 +387,8 @@ class FloatingBubbleService : Service() {
                     startY = params.y
                     startTouchX = event.rawX
                     startTouchY = event.rawY
+                    startBubbleX = bubbleParams?.x ?: 0
+                    startBubbleY = bubbleParams?.y ?: 0
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -395,8 +399,8 @@ class FloatingBubbleService : Service() {
                     try {
                         quickNoteDialogView?.let { windowManager?.updateViewLayout(it, params) }
                         bubbleParams?.let { bubble ->
-                            bubble.x += dx
-                            bubble.y += dy
+                            bubble.x = startBubbleX + dx
+                            bubble.y = startBubbleY + dy
                             bubbleView?.let { windowManager?.updateViewLayout(it, bubble) }
                         }
                     } catch (_: Exception) { }
