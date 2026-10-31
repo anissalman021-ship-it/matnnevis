@@ -126,5 +126,5 @@ fun JalaliDatePickerDialog(
     )
 }
 
-private fun jalaliDateTimeLabel(timeMillis: Long): String =
+fun jalaliDateTimeLabel(timeMillis: Long): String =
     SimpleDateFormat("yyyy/MM/dd HH:mm", reminderPersianLocale).format(Date(timeMillis))
