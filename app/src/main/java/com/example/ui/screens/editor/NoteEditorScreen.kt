@@ -1,6 +1,5 @@
 package com.example.ui.screens.editor
 
-import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Intent
 import android.widget.Toast
@@ -148,6 +147,8 @@ fun NoteEditorScreen(
     }
 
     var showColorDialog by remember { mutableStateOf(false) }
+    var showExitDialog by remember { mutableStateOf(false) }
+    var showReminderDatePicker by remember { mutableStateOf(false) }
     var showCategoryDialog by remember { mutableStateOf(false) }
     var showRevisionsDialog by remember { mutableStateOf(false) }
     var showDrawingDialog by remember { mutableStateOf(false) }
@@ -175,8 +176,7 @@ fun NoteEditorScreen(
     val lineCount = remember(contentValue.text) { contentValue.text.lines().size }
 
     BackHandler {
-        viewModel.saveCurrentNoteImmediately()
-        onNavigateBack()
+        showExitDialog = true
     }
 
     Scaffold(
@@ -190,16 +190,25 @@ fun NoteEditorScreen(
                 },
                 navigationIcon = {
                     IconButton(
-                        onClick = {
-                            viewModel.saveCurrentNoteImmediately()
-                            onNavigateBack()
-                        },
+                        onClick = { showExitDialog = true },
                         modifier = Modifier.testTag("editor_back_button")
                     ) {
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.backBtn)
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            viewModel.saveCurrentNoteImmediately {
+                                showExitDialog = false
+                                onNavigateBack()
+                            }
+                        },
+                        modifier = Modifier.testTag("editor_save_button")
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = strings.save, tint = MaterialTheme.colorScheme.primary)
+                    }
+
                     // Pin
                     IconButton(onClick = {
                         currentNote?.let { viewModel.togglePin(it) }
@@ -223,22 +232,7 @@ fun NoteEditorScreen(
                     }
 
                     // Reminder
-                    IconButton(onClick = {
-                        val cal = Calendar.getInstance()
-                        DatePickerDialog(context, { _, year, month, day ->
-                            TimePickerDialog(context, { _, hour, minute ->
-                                val target = Calendar.getInstance().apply {
-                                    set(year, month, day, hour, minute, 0)
-                                }
-                                viewModel.setNoteReminder(target.timeInMillis)
-                                Toast.makeText(
-                                    context,
-                                    "${strings.reminder}: ${SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(target.time)}",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
-                        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
-                    }) {
+                    IconButton(onClick = { showReminderDatePicker = true }) {
                         Icon(
                             imageVector = Icons.Default.Notifications,
                             contentDescription = strings.reminder,
@@ -265,7 +259,6 @@ fun NoteEditorScreen(
                                 text = { Text(strings.readingMode) },
                                 onClick = {
                                     showMoreMenu = false
-                                    viewModel.saveCurrentNoteImmediately()
                                     onNavigateToReading(currentNote?.id ?: 0L)
                                 }
                             )
@@ -274,7 +267,6 @@ fun NoteEditorScreen(
                                 text = { Text(strings.focusMode) },
                                 onClick = {
                                     showMoreMenu = false
-                                    viewModel.saveCurrentNoteImmediately()
                                     onNavigateToFocus(currentNote?.id ?: 0L)
                                 }
                             )
@@ -876,6 +868,57 @@ fun NoteEditorScreen(
             confirmButton = {
                 TextButton(onClick = { showCategoryDialog = false }) {
                     Text(strings.cancel)
+                }
+            }
+        )
+    }
+
+    if (showReminderDatePicker) {
+        JalaliDatePickerDialog(
+            onDismiss = { showReminderDatePicker = false },
+            onDateSelected = { selectedDate ->
+                showReminderDatePicker = false
+                val initial = Calendar.getInstance().apply { timeInMillis = selectedDate }
+                TimePickerDialog(context, { _, hour, minute ->
+                    val target = Calendar.getInstance().apply {
+                        timeInMillis = selectedDate
+                        set(Calendar.HOUR_OF_DAY, hour)
+                        set(Calendar.MINUTE, minute)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    viewModel.setNoteReminder(target.timeInMillis)
+                    Toast.makeText(
+                        context,
+                        "${strings.reminder}: ${jalaliDateTimeLabel(target.timeInMillis)}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }, initial.get(Calendar.HOUR_OF_DAY), initial.get(Calendar.MINUTE), true).show()
+            }
+        )
+    }
+
+    if (showExitDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitDialog = false },
+            title = { Text("ذخیره یادداشت؟") },
+            text = { Text("تغییرات فقط با تأیید ذخیره باقی می‌مانند. می‌خواهی یادداشت را ذخیره کنی؟") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.saveCurrentNoteImmediately {
+                        showExitDialog = false
+                        onNavigateBack()
+                    }
+                }) { Text(strings.save) }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        viewModel.loadNoteForEditing(noteId)
+                        showExitDialog = false
+                        onNavigateBack()
+                    }) { Text("خروج بدون ذخیره") }
+                    TextButton(onClick = { showExitDialog = false }) { Text(strings.cancel) }
                 }
             }
         )
