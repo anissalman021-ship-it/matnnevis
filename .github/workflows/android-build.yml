@@ -71,7 +71,8 @@ jobs:
 
       - name: Explain release signing requirements
         if: ${{ env.ANDROID_KEYSTORE_BASE64 == '' || env.ANDROID_KEYSTORE_PASSWORD == '' || env.ANDROID_KEY_PASSWORD == '' }}
-        run: echo 'Release APK/AAB skipped: configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_PASSWORD in repository Actions secrets.'
+        run: |
+          echo 'Release APK/AAB skipped: configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_PASSWORD in repository Actions secrets.'
 
       - name: Restore release keystore
         if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_PASSWORD != '' }}
