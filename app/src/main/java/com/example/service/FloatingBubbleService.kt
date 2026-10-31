@@ -331,7 +331,7 @@ class FloatingBubbleService : Service() {
                         val repository = MatnnevisApp.instance.repository
                         val categories = repository.categories.first()
                         val labels = listOf("بدون دسته‌بندی") + categories.map { it.name }
-                        AlertDialog.Builder(this@FloatingBubbleService)
+                        val categoryDialog = AlertDialog.Builder(this@FloatingBubbleService)
                             .setTitle(currentStrings.categories)
                             .setItems(labels.toTypedArray()) { _, which ->
                                 scope.launch {
@@ -351,7 +351,15 @@ class FloatingBubbleService : Service() {
                                 }
                             }
                             .setNegativeButton(currentStrings.cancel, null)
-                            .show()
+                            .create()
+                        val dialogType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                        } else {
+                            @Suppress("DEPRECATION")
+                            WindowManager.LayoutParams.TYPE_PHONE
+                        }
+                        categoryDialog.window?.setType(dialogType)
+                        categoryDialog.show()
                     }
                 } else {
                     Toast.makeText(this@FloatingBubbleService, currentStrings.floatingEmptyWarning, Toast.LENGTH_SHORT).show()
