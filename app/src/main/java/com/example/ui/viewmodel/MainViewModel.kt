@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -279,7 +280,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             if (noteId == null || noteId == 0L) {
                 _currentEditingNote.value = NoteEntity(
-                    colorId = userPreferences.value.defaultNoteColor
+                    colorId = userPreferences.value.defaultNoteColor,
+                    // A new note created while a category filter is active belongs
+                    // to that category by default; the editor still lets the user change it.
+                    categoryId = _selectedCategoryId.value
                 )
                 _currentChecklists.value = emptyList()
                 _currentAttachments.value = emptyList()
@@ -331,22 +335,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNoteReminder(timeMillis: Long?) {
         val current = _currentEditingNote.value ?: return
-        val updated = current.copy(reminderTime = timeMillis)
-        _currentEditingNote.value = updated
-        saveCurrentNoteImmediately()
-
-        if (timeMillis != null && timeMillis > System.currentTimeMillis()) {
-            val strings = AppStrings.get(userPreferences.value.language)
-            ReminderManager.scheduleReminder(
-                getApplication(),
-                updated.id,
-                updated.title.ifBlank { strings.reminderNotificationTitle },
-                updated.content.ifBlank { strings.reminderNotificationBody },
-                timeMillis
-            )
-        } else if (timeMillis == null) {
-            ReminderManager.cancelReminder(getApplication(), updated.id)
-        }
+        _currentEditingNote.value = current.copy(reminderTime = timeMillis)
     }
 
     // Checklists management in Editor
@@ -355,7 +344,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = _currentChecklists.value.toMutableList()
         current.add(ChecklistItem(text = text, order = current.size))
         _currentChecklists.value = current
-        saveCurrentNoteImmediately()
     }
 
     fun toggleChecklistItem(id: String) {
@@ -363,13 +351,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (it.id == id) it.copy(isChecked = !it.isChecked) else it
         }
         _currentChecklists.value = current
-        saveCurrentNoteImmediately()
     }
 
     fun removeChecklistItem(id: String) {
         val current = _currentChecklists.value.filter { it.id != id }
         _currentChecklists.value = current
-        saveCurrentNoteImmediately()
     }
 
     // Attachments management in Editor
@@ -377,40 +363,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = _currentAttachments.value.toMutableList()
         current.add(AttachmentItem(type = type, uriOrPath = uriOrPath, title = title))
         _currentAttachments.value = current
-        saveCurrentNoteImmediately()
     }
 
     fun removeAttachment(id: String) {
         val current = _currentAttachments.value.filter { it.id != id }
         _currentAttachments.value = current
-        saveCurrentNoteImmediately()
     }
 
     // Auto-save logic
     private fun triggerDebouncedAutoSave() {
-        if (!userPreferences.value.autoSaveEnabled) return
+        // Editing is staged in memory; persistence happens only after explicit user confirmation.
         autoSaveJob?.cancel()
-        autoSaveJob = viewModelScope.launch {
-            delay(800)
-            saveCurrentNoteImmediately()
-        }
     }
 
-    fun saveCurrentNoteImmediately() {
-        val note = _currentEditingNote.value ?: return
+    fun saveCurrentNoteImmediately(onSaved: (() -> Unit)? = null) {
+        val note = _currentEditingNote.value
+        if (note == null) {
+            onSaved?.invoke()
+            return
+        }
         if (note.title.isBlank() && note.content.isBlank() && _currentChecklists.value.isEmpty() && _currentAttachments.value.isEmpty()) {
+            onSaved?.invoke()
             return
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             val checklistsStr = serializeChecklists(_currentChecklists.value)
             val attachmentsStr = serializeAttachments(_currentAttachments.value)
             val toSave = note.copy(
                 checklistsJson = checklistsStr,
                 attachmentsJson = attachmentsStr
             )
-            val savedId = repository.saveNote(toSave)
-            _currentEditingNote.value = toSave.copy(id = savedId)
+            val savedId = withContext(Dispatchers.IO) { repository.saveNote(toSave) }
+            val savedNote = toSave.copy(id = savedId)
+            _currentEditingNote.value = savedNote
+            val reminderTime = savedNote.reminderTime
+            if (reminderTime != null && reminderTime > System.currentTimeMillis()) {
+                val strings = AppStrings.get(userPreferences.value.language)
+                ReminderManager.scheduleReminder(
+                    getApplication(),
+                    savedId,
+                    savedNote.title.ifBlank { strings.reminderNotificationTitle },
+                    savedNote.content.ifBlank { strings.reminderNotificationBody },
+                    reminderTime
+                )
+            } else if (reminderTime == null) {
+                ReminderManager.cancelReminder(getApplication(), savedId)
+            }
+            onSaved?.invoke()
         }
     }
 

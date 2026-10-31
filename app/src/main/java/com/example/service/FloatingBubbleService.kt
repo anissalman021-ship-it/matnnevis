@@ -2,6 +2,7 @@ package com.example.service
 
 import android.annotation.SuppressLint
 import android.app.Notification
+import android.app.AlertDialog
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -24,6 +25,8 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import android.text.Editable
+import android.text.TextWatcher
 import androidx.core.app.NotificationCompat
 import com.example.MatnnevisApp
 import com.example.R
@@ -45,6 +48,8 @@ class FloatingBubbleService : Service() {
     private var dialogParams: WindowManager.LayoutParams? = null
 
     private var isDialogShowing = false
+    private var draftTitle: String = ""
+    private var draftBody: String = ""
     private val scope = CoroutineScope(Dispatchers.Main)
     private var currentStrings: AppStrings.Strings = AppStrings.get(Language.FA)
 
@@ -65,6 +70,10 @@ class FloatingBubbleService : Service() {
                 // Keep default
             }
         }
+
+        val scratch = getSharedPreferences(SCRATCH_PREFS, Context.MODE_PRIVATE)
+        draftTitle = scratch.getString(SCRATCH_TITLE, "").orEmpty()
+        draftBody = scratch.getString(SCRATCH_BODY, "").orEmpty()
 
         startForeground(NOTIFICATION_ID, createNotification())
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -236,6 +245,7 @@ class FloatingBubbleService : Service() {
 
         header.addView(titleTv)
         header.addView(closeBtn)
+        installDialogDragHandle(header)
         cardLayout.addView(header)
 
         // Title Input
@@ -258,6 +268,12 @@ class FloatingBubbleService : Service() {
                 topMargin = (12 * density).toInt()
             }
         }
+        titleInput.setText(draftTitle)
+        titleInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { draftTitle = s?.toString().orEmpty() }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
         cardLayout.addView(titleInput)
 
         // Content Input
@@ -282,6 +298,12 @@ class FloatingBubbleService : Service() {
                 topMargin = (10 * density).toInt()
             }
         }
+        contentInput.setText(draftBody)
+        contentInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { draftBody = s?.toString().orEmpty() }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
         cardLayout.addView(contentInput)
 
         // Action Buttons Row
@@ -311,15 +333,38 @@ class FloatingBubbleService : Service() {
                 if (title.isNotEmpty() || body.isNotEmpty()) {
                     scope.launch {
                         val repository = MatnnevisApp.instance.repository
-                        repository.saveNote(
-                            NoteEntity(
-                                title = title.ifBlank { currentStrings.quickNote },
-                                content = body,
-                                colorId = "blue"
-                            )
-                        )
-                        Toast.makeText(this@FloatingBubbleService, currentStrings.floatingSavedToast, Toast.LENGTH_SHORT).show()
-                        hideQuickNoteDialog()
+                        val categories = repository.categories.first()
+                        val labels = listOf("بدون دسته‌بندی") + categories.map { it.name }
+                        val categoryDialog = AlertDialog.Builder(this@FloatingBubbleService)
+                            .setTitle(currentStrings.categories)
+                            .setItems(labels.toTypedArray()) { _, which ->
+                                scope.launch {
+                                    val categoryId = if (which == 0) null else categories[which - 1].id
+                                    repository.saveNote(
+                                        NoteEntity(
+                                            title = title.ifBlank { currentStrings.quickNote },
+                                            content = body,
+                                            colorId = "blue",
+                                            categoryId = categoryId
+                                        )
+                                    )
+                                    draftTitle = ""
+                                    draftBody = ""
+                                    getSharedPreferences(SCRATCH_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+                                    Toast.makeText(this@FloatingBubbleService, currentStrings.floatingSavedToast, Toast.LENGTH_SHORT).show()
+                                    hideQuickNoteDialog()
+                                }
+                            }
+                            .setNegativeButton(currentStrings.cancel, null)
+                            .create()
+                        val dialogType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                        } else {
+                            @Suppress("DEPRECATION")
+                            WindowManager.LayoutParams.TYPE_PHONE
+                        }
+                        categoryDialog.window?.setType(dialogType)
+                        categoryDialog.show()
                     }
                 } else {
                     Toast.makeText(this@FloatingBubbleService, currentStrings.floatingEmptyWarning, Toast.LENGTH_SHORT).show()
@@ -336,6 +381,47 @@ class FloatingBubbleService : Service() {
             isDialogShowing = true
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun installDialogDragHandle(handle: View) {
+        var startX = 0
+        var startY = 0
+        var startTouchX = 0f
+        var startTouchY = 0f
+        var startBubbleX = 0
+        var startBubbleY = 0
+        handle.setOnTouchListener { _, event ->
+            val params = dialogParams ?: return@setOnTouchListener false
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = params.x
+                    startY = params.y
+                    startTouchX = event.rawX
+                    startTouchY = event.rawY
+                    startBubbleX = bubbleParams?.x ?: 0
+                    startBubbleY = bubbleParams?.y ?: 0
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (event.rawX - startTouchX).toInt()
+                    val dy = (event.rawY - startTouchY).toInt()
+                    params.x = startX + dx
+                    params.y = startY + dy
+                    try {
+                        quickNoteDialogView?.let { windowManager?.updateViewLayout(it, params) }
+                        bubbleParams?.let { bubble ->
+                            bubble.x = startBubbleX + dx
+                            bubble.y = startBubbleY + dy
+                            bubbleView?.let { windowManager?.updateViewLayout(it, bubble) }
+                        }
+                    } catch (_: Exception) { }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> true
+                else -> false
+            }
         }
     }
 
@@ -367,6 +453,9 @@ class FloatingBubbleService : Service() {
 
     companion object {
         const val NOTIFICATION_ID = 1001
+        private const val SCRATCH_PREFS = "floating_scratch_draft"
+        private const val SCRATCH_TITLE = "title"
+        private const val SCRATCH_BODY = "body"
 
         fun hasOverlayPermission(context: Context): Boolean {
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
