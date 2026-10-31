@@ -17,10 +17,6 @@ jobs:
   debug-and-test:
     name: Debug APK and unit tests
     runs-on: ubuntu-latest
-    env:
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -51,6 +47,10 @@ jobs:
   signed-release:
     name: Signed release APK and AAB
     runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -66,10 +66,8 @@ jobs:
 
       - name: Restore release keystore
         if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_PASSWORD != '' }}
-        env:
-          KEYSTORE_BASE64: ${{ env.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/matnnevis-upload.jks"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/matnnevis-upload.jks"
           test -s "$RUNNER_TEMP/matnnevis-upload.jks"
 
       - name: Build signed release APK and AAB
