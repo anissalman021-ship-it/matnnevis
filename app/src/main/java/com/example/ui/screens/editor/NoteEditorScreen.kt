@@ -158,7 +158,7 @@ fun NoteEditorScreen(
     val audioRecorder = remember { AudioRecorderHelper(context) }
     val audioPlayer = remember { AudioPlayerHelper() }
     var isRecording by remember { mutableStateOf(false) }
-    var isPlayingAudio by remember { mutableStateOf(false) }
+    var playingAudioId by remember { mutableStateOf<String?>(null) }
 
     val isDark = isSystemInDarkTheme()
     val noteColor = NoteColors.fromId(currentNote?.colorId ?: "default")
@@ -763,18 +763,18 @@ fun NoteEditorScreen(
                                     }
                                     AttachmentType.AUDIO -> {
                                         IconButton(onClick = {
-                                            if (isPlayingAudio) {
+                                            if (playingAudioId == att.id) {
                                                 audioPlayer.stop()
-                                                isPlayingAudio = false
+                                                playingAudioId = null
                                             } else {
                                                 audioPlayer.play(att.uriOrPath) {
-                                                    isPlayingAudio = false
+                                                    if (playingAudioId == att.id) playingAudioId = null
                                                 }
-                                                isPlayingAudio = true
+                                                playingAudioId = att.id
                                             }
                                         }) {
                                             Icon(
-                                                imageVector = if (isPlayingAudio) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                                imageVector = if (playingAudioId == att.id) Icons.Default.Stop else Icons.Default.PlayArrow,
                                                 contentDescription = strings.recordVoice,
                                                 tint = MaterialTheme.colorScheme.primary
                                             )
