@@ -17,6 +17,10 @@ jobs:
   debug-and-test:
     name: Debug APK and unit tests
     runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -47,7 +51,6 @@ jobs:
   signed-release:
     name: Signed release APK and AAB
     runs-on: ubuntu-latest
-    if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -62,13 +65,15 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Restore release keystore
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_PASSWORD != '' }}
         env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_BASE64: ${{ env.ANDROID_KEYSTORE_BASE64 }}
         run: |
           echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/matnnevis-upload.jks"
           test -s "$RUNNER_TEMP/matnnevis-upload.jks"
 
       - name: Build signed release APK and AAB
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_PASSWORD != '' }}
         env:
           KEYSTORE_PATH: ${{ runner.temp }}/matnnevis-upload.jks
           STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -76,6 +81,7 @@ jobs:
         run: gradle assembleRelease bundleRelease --no-daemon
 
       - name: Upload signed release APK
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_PASSWORD != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: matnnevis-release-apk
@@ -84,6 +90,7 @@ jobs:
           retention-days: 30
 
       - name: Upload signed release AAB
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_PASSWORD != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: matnnevis-release-aab
