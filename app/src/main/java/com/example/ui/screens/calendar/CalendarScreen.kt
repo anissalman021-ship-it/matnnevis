@@ -81,9 +81,8 @@ fun CalendarScreen(
     val categories by viewModel.categories.collectAsState()
 
     var calendarMonthOffset by remember { mutableIntStateOf(0) }
-    var selectedDayKey by remember {
-        mutableStateOf(jalaliDateKey(System.currentTimeMillis()))
-    }
+    var selectedDayTimeMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    var selectedDayKey by remember { mutableStateOf(jalaliDateKey(selectedDayTimeMillis)) }
 
     val currentCalendar = remember(calendarMonthOffset) {
         PersianCalendar.getInstance(persianCalendarLocale).apply {
@@ -131,7 +130,8 @@ fun CalendarScreen(
                 actions = {
                     IconButton(onClick = {
                         calendarMonthOffset = 0
-                        selectedDayKey = jalaliDateKey(System.currentTimeMillis())
+                        selectedDayTimeMillis = System.currentTimeMillis()
+                        selectedDayKey = jalaliDateKey(selectedDayTimeMillis)
                     }) {
                         Icon(imageVector = Icons.Default.CalendarToday, contentDescription = strings.todayBtn)
                     }
@@ -225,7 +225,10 @@ fun CalendarScreen(
                                     color = if (notesCount > 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Color.Transparent,
                                     shape = CircleShape
                                 )
-                                .clickable { selectedDayKey = dateKey },
+                                .clickable {
+                                    selectedDayTimeMillis = tempCal.timeInMillis
+                                    selectedDayKey = dateKey
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -261,7 +264,7 @@ fun CalendarScreen(
             ) {
                 Column {
                     Text(
-                        text = "${strings.notesForDateLabel} ${jalaliDateLabel(notesForSelectedDay.firstOrNull()?.createdAt ?: currentCalendar.timeInMillis)}",
+                        text = "${strings.notesForDateLabel} ${jalaliDateLabel(selectedDayTimeMillis)}",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -275,7 +278,7 @@ fun CalendarScreen(
                 Button(
                     onClick = {
                         viewModel.loadNoteForEditing(0L)
-                        viewModel.updateEditorTitle("${strings.dailyNote} — ${jalaliDateLabel(currentCalendar.timeInMillis)}")
+                        viewModel.updateEditorTitle("${strings.dailyNote} — ${jalaliDateLabel(selectedDayTimeMillis)}")
                         viewModel.updateEditorTags(strings.dailyNote)
                         viewModel.saveCurrentNoteImmediately()
                         onNavigateToEditor(0L)
